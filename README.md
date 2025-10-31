@@ -2,9 +2,8 @@
 
 ## Descripción
 
-Eggs de Pterodactyl para usar o usados en servidores de luanti.es
+Eggs de Pterodactyl para usar o usados en servidores de luanti.es.
 
-## Créditos
+## Documentación
 
-- Cacatuo - Owner de Hispania (hispania.luanti.es, puerto 30003)
-- OrugA
+Continúa leyendo en [/docs/README.md](/docs/README.md).
