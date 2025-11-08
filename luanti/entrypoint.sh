@@ -18,18 +18,20 @@ im_exiting_now() {
 trap "im_exiting_now INT" INT;
 #trap "im_exiting_now TERM" TERM;
 
+figlet -cw123 "${SERVER_DOMAIN}";
 echo "[entrypoint] Starting Luanti Pterodactyl Yolk";
+echo "[entrypoint] - Version: ..............: ${LUANTI_VERSION} - OrugA Edition";
 echo "[entrypoint] ";
 
 # The following variables are already present thanks to the Wings controller,
 # according the source code, located at:
 # https://github.com/pterodactyl/wings/blob/ae6c62905bd1dcffd3d73c571efba2d53667317a/server/server.go#L148
 echo "[entrypoint] Wings environment variables";
-echo "[entrypoint] - TZ ................: '${TZ}'";
-echo "[entrypoint] - STARTUP ...........: '${STARTUP}'";
-echo "[entrypoint] - SERVER_MEMORY .....: '${SERVER_MEMORY}'";
-echo "[entrypoint] - SERVER_IP .........: '${SERVER_IP}'";
-echo "[entrypoint] - SERVER_PORT .......: '${SERVER_PORT}'";
+echo "[entrypoint] - TZ ....................: '${TZ}'";
+echo "[entrypoint] - STARTUP ...............: '${STARTUP}'";
+echo "[entrypoint] - SERVER_MEMORY .........: '${SERVER_MEMORY}'";
+echo "[entrypoint] - SERVER_IP .............: '${SERVER_IP}'";
+echo "[entrypoint] - SERVER_PORT ...........: '${SERVER_PORT}'";
 echo "[entrypoint] ";
 
 # The following variables are already present thanks to the Egg definition:
@@ -52,7 +54,7 @@ echo "[entrypoint] ";
 # Replace Startup Variables
 MODIFIED_STARTUP=`eval echo $(echo ${STARTUP} | sed -e 's/{{/${/g' -e 's/}}/}/g')`;
 echo "[entrypoint] Modified startup string:";
-echo "[entrypoint] - MODIFIED_STARTUP ..: '${MODIFIED_STARTUP}'";
+echo "[entrypoint] - MODIFIED_STARTUP ......: '${MODIFIED_STARTUP}'";
 echo "[entrypoint] ";
 
 # Run the Server
