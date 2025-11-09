@@ -37,12 +37,6 @@ RUN set -ex; \
     --gid 1000 \
     "container" \
   ; \
-  # #
-  # # For the cases where system lua libs are installed in different locations
-  # mkdir -pv /usr/local/share/lua; \
-  # ln -s /usr/local/share/lua /usr/share/lua; \
-  # mkdir -pv /usr/local/lib/lua; \
-  # ln -s /usr/local/lib/lua /usr/lib/x86_64-linux-gnu/lua; \
   #
   # Install common packages
   apt-get update; \
@@ -57,7 +51,6 @@ RUN set -ex; \
     iproute2 \
     libfreetype6-dev \
     libjsoncpp-dev \
-    luarocks \
     nano \
     openssl \
     rsync \
@@ -70,6 +63,7 @@ RUN set -ex; \
     wget \
     zip \
   ; \
+  #
   # Add sudo access to user
   echo 'container ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers; \
   #
@@ -88,18 +82,6 @@ RUN set -ex; \
     zlib1g-dev \
   ; \
   #
-  # As we cannot use real version for luajit (they use rolling releases), we then
-  # stick to the latest stable commit, by means of its hash:
-  # - 20251103 - v2.1 - 8518c0b40b1734901de888a0a363450c0709d3f8
-  mkdir -pv build; \
-  cd build; \
-  git clone https://github.com/LuaJIT/LuaJIT luajit; \
-  cd luajit; \
-  git checkout "8518c0b40b1734901de888a0a363450c0709d3f8"; \
-  make amalg PREFIX=/usr/local; \
-  make install PREFIX=/usr/local DESTDIR=/; \
-  cd ..; \
-  #
   # Until version 5.9 Minetest uses custom irrlicht which needs to match with
   # the one used at the time of the release, otherwise the build may fail.
   # Also older irc mods depends on older luasocket version. We will match under
@@ -107,24 +89,45 @@ RUN set -ex; \
   # the same time.
   if [ "${LUANTI_VERSION}" = "5.6.0" ]; then \
     LUANTI_NAME="minetest"; \
+    LUASOCKET_VERSION="v3.1.0"; \
     IRRLICHT_VERSION="1.9.0mt7"; \
-    LUASOCKET_VERSION="3.0rc1-2"; \
   elif [ "${LUANTI_VERSION}" = "5.9.0" ]; then \
     LUANTI_NAME="EDITME"; \
+    LUASOCKET_VERSION="v3.1.0"; \
     IRRLICHT_VERSION="shipped"; \
-    LUASOCKET_VERSION="3.1.0-1"; \
   fi; \
+  #
+  # Set the base path
+  mkdir -pv /build; \
+  cd /build; \
+  #
+  # As we cannot use real version for luajit (they use rolling releases), we then
+  # stick to the latest stable commit, by means of its hash:
+  # - 20251103 - v2.1 - 8518c0b40b1734901de888a0a363450c0709d3f8
+  git clone https://github.com/LuaJIT/LuaJIT luajit; \
+  cd luajit; \
+  git checkout "8518c0b40b1734901de888a0a363450c0709d3f8"; \
+  make -j CCOPT=" -O2 -fomit-frame-pointer -fPIC " \
+          XCFLAGS="-DLUAJIT_ENABLE_GC64" amalg PREFIX="/usr/local"; \
+  make install PREFIX="/usr/local" DESTDIR="/"; \
+  cd ..; \
+  #
+  # Get luasocket and compile it against luajit
+  ln -sf "luajit-2.1" "/usr/local/include/lua5.1"; \
+  git clone --depth=1 --branch="${LUASOCKET_VERSION}" https://github.com/diegonehab/luasocket; \
+  cd luasocket; \
+  make -j PLAT=linux DEBUG=NODEBUG LUAV=5.1 \
+          LUAINC_linux_base="/usr/local/include" \
+          LDFLAGS_linux="-O -shared -fpic -Wl,--no-undefined /usr/local/lib/libluajit-5.1.a -lm -ldl -o "; \
+  make install PREFIX="/usr/local"; \
+  cd ..; \
   #
   # Get irrlicht (irrlichtmt) if required
   IRRLICHT_ARGS=""; \
   if ! [ "${IRRLICHT_VERSION}" = "shipped" ]; then \
     git clone --depth=1 --branch="${IRRLICHT_VERSION}" https://github.com/minetest/irrlicht; \
-    IRRLICHT_ARGS="-DIRRLICHT_INCLUDE_DIR=../../irrlicht/include -DENABLE_GLES=0"; \
+    IRRLICHT_ARGS="-DIRRLICHT_INCLUDE_DIR=/build/irrlicht/include -DENABLE_GLES=0"; \
   fi; \
-  #
-  # Install luasocket via luarocks
-  apt-get install luarocks; \
-  luarocks --lua-version 5.1 install luasocket "${LUASOCKET_VERSION}"; \
   #
   # Install Luanti, server-only flavour
   wget -Osrc.zip "https://github.com/luanti-org/luanti/archive/${LUANTI_VERSION}.zip"; \
@@ -139,8 +142,8 @@ RUN set -ex; \
     -DCUSTOM_BINDIR="/usr/bin" \
     -DCUSTOM_DOCDIR="/usr/share/doc/${LUANTI_NAME}" \
     -DCUSTOM_SHAREDIR="/usr/share/${LUANTI_NAME}" \
-    -DLUA_INCLUDE_DIR="../../luajit/src/" \
-    -DLUA_LIBRARY="../../luajit/src/libluajit.a" \
+    -DLUA_INCLUDE_DIR="/build/luajit/src/" \
+    -DLUA_LIBRARY="/build/luajit/src/libluajit.a" \
     # All CMake variables, from:
     # https://github.com/luanti-org/luanti/tree/master/doc/compiling#cmake-options
     # Build Luanti client
@@ -200,12 +203,15 @@ RUN set -ex; \
   ; \
   ninja; \
   ninja install; \
+  #
   # Normalize name for direct egg compatibility across different versions
-  if [ -f "/usr/bin/minetestserver" ]; then \
-    ln -s /usr/bin/minetestserver /usr/bin/luanti; \
-    ln -s /usr/bin/minetestserver /usr/bin/luantiserver; \
+  if [ -f "/usr/bin/minetest" ]; then \
+    ln -s "/usr/bin/minetest" "/usr/bin/luanti"; \
   fi ; \
-  cd ../../..; \
+  if [ -f "/usr/bin/minetestserver" ]; then \
+    ln -s "/usr/bin/minetestserver" "/usr/bin/luantiserver"; \
+  fi ; \
+  cd /; \
   rm -rfv build; \
   #
   # Full cleanup to free as much space as possible
@@ -218,7 +224,6 @@ RUN set -ex; \
     libncurses-dev \
     libsqlite3-dev \
     libzstd-dev \
-    luarocks \
     ninja-build \
     zlib1g-dev \
   ; \
